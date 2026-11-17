@@ -21,7 +21,7 @@ jobs:
           cache: true
       - run: flutter create --platforms=web .
       - run: flutter pub get
-      - run: flutter build web --release --base-href /cha-tara/
+      - run: flutter build web --release --base-href /
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
