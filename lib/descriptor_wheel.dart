@@ -183,20 +183,23 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
         );
       })),
       const SizedBox(height: 16),
-      const Text('Группа', style: TextStyle(fontWeight: FontWeight.w600)),
+      const Text('Выберите группу',
+          style: TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
-      Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: List.generate(
-              groups.length,
-              (i) => ChoiceChip(
-                  label: Text(groups[i].name),
-                  selected: active == i,
-                  selectedColor: groups[i].color.withValues(alpha: .35),
-                  onSelected: (_) => setState(() => active = i)))),
+      DropdownButtonFormField<int>(
+        key: ValueKey(active),
+        initialValue: active,
+        isExpanded: true,
+        decoration: const InputDecoration(
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+        items: List.generate(groups.length,
+            (i) => DropdownMenuItem(value: i, child: Text(groups[i].name))),
+        onChanged: (i) {
+          if (i != null) setState(() => active = i);
+        },
+      ),
       const SizedBox(height: 18),
-      Text('Оттенки · ${group.name}',
+      Text('Что вы чувствуете? · ${group.name}',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
       Wrap(
