@@ -19,13 +19,28 @@ const groups = [
     'Шершавый',
     'Маслянистый',
     'Гладкий',
+    'Подвижный',
     'Лёгкий',
     'Плотный'
   ]),
   DescriptorGroup('Баланс', Color(0xffa5a482),
       ['Сбалансированный', 'Гармоничный', 'Резкий', 'Грубый']),
+  DescriptorGroup('Букет', Color(0xffb29878), [
+    'Сложный',
+    'Богатый',
+    'Простой',
+    'Однообразный',
+    'Характерный',
+    'Нетипичный',
+  ]),
+  DescriptorGroup('Экстрактивность', Color(0xff8c956d), [
+    'Полный (крепкий)',
+    'Пустой (слабый, водянистый)',
+  ]),
   DescriptorGroup('Послевкусие', Color(0xffb2a184),
       ['Интенсивное', 'Слабое', 'Длительное', 'Быстро уходящее']),
+  DescriptorGroup('Тип послевкусия', Color(0xffb2a184),
+      ['Вкус', 'Аромат', 'Ощущение', 'Температура']),
   DescriptorGroup('Цветочный', Color(0xffbd827c),
       ['Жасмин', 'Сирень', 'Роза', 'Липа, нарцисс', 'Пион, клевер']),
   DescriptorGroup('Сладкий', Color(0xffc79563), [
@@ -71,7 +86,7 @@ const groups = [
     'Базилик',
     'Камфора',
     'Кориандр',
-    'Корни'
+    'Корни (хрен, сельдерей)'
   ]),
   DescriptorGroup('Кофейный', Color(0xff806c60), ['Кофе']),
   DescriptorGroup('Ореховый', Color(0xffb59b6a), [
@@ -128,9 +143,27 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
   int active = 0;
   String keyFor(String note) =>
       'Пролив ${widget.infusion} · ${widget.type}: $note';
+
+  Widget noteOptions(DescriptorGroup group) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: [
+        for (final note in group.notes)
+          FilterChip(
+            label: Text(note),
+            selected: widget.selected.contains(keyFor(note)),
+            selectedColor: group.color.withValues(alpha: .35),
+            onSelected: (selected) => widget.onChanged(keyFor(note), selected),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final group = groups[active];
+    final showBasicTastes = widget.type == 'Вкус';
     final selectedForCurrent = widget.selected
         .where(
             (s) => s.startsWith('Пролив ${widget.infusion} · ${widget.type}: '))
@@ -143,9 +176,17 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
           'Пролив ${widget.infusion} · ${widget.type}. Выберите сектор, затем отметьте знакомые оттенки.',
           style: const TextStyle(color: Color(0xff77786b), height: 1.35)),
       const SizedBox(height: 16),
+      if (showBasicTastes) ...[
+        const Text('Основные вкусы',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        noteOptions(groups.first),
+        const SizedBox(height: 16),
+      ],
       Center(child: LayoutBuilder(builder: (context, constraints) {
         final size = math.min(constraints.maxWidth, 310.0);
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTapUp: (event) {
             final p = event.localPosition - Offset(size / 2, size / 2);
             final distance = p.distance;
@@ -199,20 +240,12 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
         },
       ),
       const SizedBox(height: 18),
-      Text('Что вы чувствуете? · ${group.name}',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 6),
-      Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: group.notes.map((note) {
-            final key = keyFor(note);
-            return FilterChip(
-                label: Text(note),
-                selected: widget.selected.contains(key),
-                selectedColor: group.color.withValues(alpha: .35),
-                onSelected: (v) => widget.onChanged(key, v));
-          }).toList()),
+      if (!showBasicTastes || active != 0) ...[
+        Text(group.name,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        noteOptions(group),
+      ],
       if (selectedForCurrent.isNotEmpty) ...[
         const SizedBox(height: 16),
         const Text('Отмечено', style: TextStyle(fontWeight: FontWeight.w600)),
