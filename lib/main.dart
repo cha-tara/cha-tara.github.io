@@ -177,10 +177,10 @@ Widget build(BuildContext context) {
   const pageInset = 20.0;
   final pages = [home, master, diary, session, catalog];
   final wideLayout = MediaQuery.sizeOf(context).width > pageWidth;
-  final desktopPlatform = switch (Theme.of(context).platform) {
-    TargetPlatform.linux || TargetPlatform.macOS || TargetPlatform.windows => true,
-    _ => false,
-  };
+  final platform = Theme.of(context).platform;
+  final largeNavigationLabels = wideLayout &&
+      platform != TargetPlatform.iOS &&
+      platform != TargetPlatform.android;
 
   return Scaffold(
     appBar: AppBar(
@@ -210,10 +210,10 @@ Widget build(BuildContext context) {
           maxWidth: wideLayout ? pageWidth - 2 * pageInset : pageWidth,
         ),
         child: NavigationBar(
-          height: 72,
-          labelTextStyle: desktopPlatform
+          height: largeNavigationLabels ? 80 : 72,
+          labelTextStyle: largeNavigationLabels
               ? const WidgetStatePropertyAll(
-                  TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ink),
                 )
               : null,
           backgroundColor: const Color(0xffe9e4d5),
