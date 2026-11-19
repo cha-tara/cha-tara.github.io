@@ -142,6 +142,42 @@ class _FeedSignInState extends State<FeedSignIn> {
     }
   }
 
+  Widget input({
+    required String label,
+    required TextEditingController controller,
+    required FormFieldValidator<String> validator,
+    Iterable<String>? autofillHints,
+    bool obscureText = false,
+    int? maxLength,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ExcludeSemantics(
+          child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+        ),
+        const SizedBox(height: 6),
+        Semantics(
+          label: label,
+          child: TextFormField(
+            controller: controller,
+            enabled: !sending,
+            maxLength: maxLength,
+            autofillHints: autofillHints,
+            autocorrect: !obscureText && autofillHints == null,
+            obscureText: obscureText,
+            decoration: const InputDecoration(
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              errorMaxLines: 3,
+            ),
+            validator: validator,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
         canPop: !sending,
@@ -153,38 +189,34 @@ class _FeedSignInState extends State<FeedSignIn> {
             child: AutofillGroup(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (register) ...[
-                  TextFormField(
+                  input(
+                    label: 'Имя в ленте',
                     controller: name,
-                    enabled: !sending,
                     maxLength: 40,
-                    decoration: const InputDecoration(labelText: 'Имя в ленте'),
                     validator: (value) =>
                         value!.trim().isEmpty ? 'Введите имя' : null,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                 ],
-                TextFormField(
+                input(
+                  label: 'Логин',
                   controller: login,
-                  enabled: !sending,
                   autofillHints: const [AutofillHints.username],
-                  autocorrect: false,
-                  decoration: const InputDecoration(labelText: 'Логин'),
                   validator: (value) =>
                       RegExp(r'^[a-zA-Z0-9_]{3,32}$').hasMatch(value!.trim())
                           ? null
                           : 'От 3 до 32 латинских букв, цифр или _',
                 ),
-                const SizedBox(height: 8),
-                TextFormField(
+                const SizedBox(height: 12),
+                input(
+                  label: 'Пароль',
                   controller: password,
-                  enabled: !sending,
                   obscureText: true,
                   autofillHints: [
                     register
                         ? AutofillHints.newPassword
                         : AutofillHints.password
                   ],
-                  decoration: const InputDecoration(labelText: 'Пароль'),
                   validator: (value) =>
                       value!.length >= 10 && value.length <= 128
                           ? null
