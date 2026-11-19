@@ -89,7 +89,7 @@ Widget home() => Column(
             child: Image.asset(
               'assets/brand.jpg',
               fit: BoxFit.cover,
-              alignment: const Alignment(0, -.24),
+              alignment: const Alignment(0, -.35),
               excludeFromSemantics: true,
             ),
           ),
