@@ -1,0 +1,21 @@
+[Unit]
+Description=Cha Tara Feed API
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+WorkingDirectory=/opt/cha-tara
+StateDirectory=cha-tara
+Environment=CHA_TARA_DB=/var/lib/cha-tara/feed.sqlite3
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/etc/cha-tara-api.env
+ExecStart=/opt/cha-tara/venv/bin/uvicorn app:app --host 127.0.0.1 --port 18743 --limit-concurrency 32 --timeout-keep-alive 5 --no-access-log
+Restart=on-failure
+MemoryMax=128M
+TasksMax=48
+Nice=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
