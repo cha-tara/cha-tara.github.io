@@ -1,5 +1,14 @@
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+const _wheelInnerDiameterRatio = .38;
+
+bool _isOnWheelRing(Offset position, double size) {
+  final distance = (position - Offset(size / 2, size / 2)).distance;
+  return distance >= size * _wheelInnerDiameterRatio / 2 &&
+      distance <= size / 2;
+}
 
 // Adapted from «Круг основных дескрипторов чая», draft 2.0, Елена Иванова.
 class DescriptorGroup {
@@ -141,6 +150,12 @@ class DescriptorWheel extends StatefulWidget {
 
 class _DescriptorWheelState extends State<DescriptorWheel> {
   int active = 0;
+  int? _touchPointer;
+
+  void _endTouch(PointerEvent event) {
+    if (event.pointer == _touchPointer) _touchPointer = null;
+  }
+
   String keyFor(String note) =>
       'Пролив ${widget.infusion} · ${widget.type}: $note';
 
@@ -186,10 +201,9 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
       Center(child: LayoutBuilder(builder: (context, constraints) {
         final size = math.min(constraints.maxWidth, 310.0);
         void selectSector(Offset position) {
-          final p = position - Offset(size / 2, size / 2);
-          final distance = p.distance;
-          if (distance < size * .19 || distance > size * .5) return;
+          if (!_isOnWheelRing(position, size)) return;
 
+          final p = position - Offset(size / 2, size / 2);
           final angle = (math.atan2(p.dy, p.dx) + math.pi / 2 + 2 * math.pi) %
               (2 * math.pi);
           final index = (angle / (2 * math.pi) * groups.length).floor();
@@ -198,36 +212,65 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
 
         return MouseRegion(
           cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown: (event) => selectSector(event.localPosition),
-            child: SizedBox.square(
-              dimension: size,
-              child: CustomPaint(
-                painter: _WheelPainter(active),
-                child: Center(
-                  child: Container(
-                    width: size * .38,
-                    height: size * .38,
-                    padding: const EdgeInsets.all(7),
-                    decoration: const BoxDecoration(
-                      color: Color(0xfffaf7ed),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        group.name,
-                        maxLines: 1,
-                        softWrap: false,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xff292b22),
+          child: RawGestureDetector(
+            // A touch beginning on the ring belongs to the wheel, including
+            // vertical movement that would otherwise scroll the session.
+            gestures: {
+              EagerGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+                () => EagerGestureRecognizer(
+                  supportedDevices: const {PointerDeviceKind.touch},
+                ),
+                (_) {},
+              ),
+            },
+            child: Listener(
+              onPointerDown: (event) {
+                if (event.kind == PointerDeviceKind.touch &&
+                    _touchPointer == null) {
+                  _touchPointer = event.pointer;
+                  selectSector(event.localPosition);
+                }
+              },
+              onPointerMove: (event) {
+                if (event.pointer == _touchPointer) {
+                  selectSector(event.localPosition);
+                }
+              },
+              onPointerUp: _endTouch,
+              onPointerCancel: _endTouch,
+              child: GestureDetector(
+                onTapDown: (event) => selectSector(event.localPosition),
+                child: SizedBox.square(
+                  dimension: size,
+                  child: CustomPaint(
+                    painter: _WheelPainter(active, size),
+                    child: IgnorePointer(
+                        child: Center(
+                      child: Container(
+                        width: size * _wheelInnerDiameterRatio,
+                        height: size * _wheelInnerDiameterRatio,
+                        padding: const EdgeInsets.all(7),
+                        decoration: const BoxDecoration(
+                          color: Color(0xfffaf7ed),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            group.name,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xff292b22),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    )),
                   ),
                 ),
               ),
@@ -280,7 +323,12 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
 
 class _WheelPainter extends CustomPainter {
   final int active;
-  _WheelPainter(this.active);
+  final double diameter;
+  _WheelPainter(this.active, this.diameter);
+
+  @override
+  bool hitTest(Offset position) => _isOnWheelRing(position, diameter);
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
@@ -306,5 +354,5 @@ class _WheelPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _WheelPainter oldDelegate) =>
-      oldDelegate.active != active;
+      oldDelegate.active != active || oldDelegate.diameter != diameter;
 }
