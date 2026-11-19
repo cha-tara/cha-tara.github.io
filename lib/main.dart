@@ -91,11 +91,11 @@ Widget home() {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AspectRatio(
-            aspectRatio: desktop ? 2.8 : 1.7,
+            aspectRatio: desktop ? 1.84 : 1.7,
             child: Image.asset(
               'assets/brand.jpg',
               fit: BoxFit.cover,
-              alignment: desktop ? const Alignment(0, .1) : const Alignment(0, -.35),
+              alignment: desktop ? const Alignment(0, -.286) : const Alignment(0, -.35),
               excludeFromSemantics: true,
             ),
           ),
