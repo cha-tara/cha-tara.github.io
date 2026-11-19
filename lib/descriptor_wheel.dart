@@ -185,40 +185,52 @@ class _DescriptorWheelState extends State<DescriptorWheel> {
       ],
       Center(child: LayoutBuilder(builder: (context, constraints) {
         final size = math.min(constraints.maxWidth, 310.0);
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapUp: (event) {
-            final p = event.localPosition - Offset(size / 2, size / 2);
-            final distance = p.distance;
-            if (distance < size * .20 || distance > size * .5) return;
-            final angle = (math.atan2(p.dy, p.dx) + math.pi / 2 + 2 * math.pi) %
-                (2 * math.pi);
-            setState(
-                () => active = (angle / (2 * math.pi) * groups.length).floor());
-          },
-          child: CustomPaint(
-            size: Size.square(size),
-            painter: _WheelPainter(active),
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: Center(
-                  child: Container(
-                width: size * .38,
-                height: size * .38,
-                decoration: const BoxDecoration(
-                    color: Color(0xfffaf7ed), shape: BoxShape.circle),
+        void selectSector(Offset position) {
+          final p = position - Offset(size / 2, size / 2);
+          final distance = p.distance;
+          if (distance < size * .19 || distance > size * .5) return;
+
+          final angle = (math.atan2(p.dy, p.dx) + math.pi / 2 + 2 * math.pi) %
+              (2 * math.pi);
+          final index = (angle / (2 * math.pi) * groups.length).floor();
+          if (index != active) setState(() => active = index);
+        }
+
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (event) => selectSector(event.localPosition),
+            child: SizedBox.square(
+              dimension: size,
+              child: CustomPaint(
+                painter: _WheelPainter(active),
                 child: Center(
-                    child: Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: Text(group.name,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
+                  child: Container(
+                    width: size * .38,
+                    height: size * .38,
+                    padding: const EdgeInsets.all(7),
+                    decoration: const BoxDecoration(
+                      color: Color(0xfffaf7ed),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        group.name,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xff292b22))),
-                )),
-              )),
+                          color: Color(0xff292b22),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );
