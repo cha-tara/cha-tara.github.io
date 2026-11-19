@@ -85,19 +85,17 @@ Widget home() {
   crossAxisAlignment: CrossAxisAlignment.stretch,
   children: [
     heading('Чайный компас', 'Чай · люди · места · культура'),
-    Center(child: ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: desktop ? 360 : double.infinity),
-      child: ClipRRect(
+    ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AspectRatio(
-            aspectRatio: 1.7,
+            aspectRatio: desktop ? 2.8 : 1.7,
             child: Image.asset(
               'assets/brand.jpg',
               fit: BoxFit.cover,
-              alignment: const Alignment(0, -.35),
+              alignment: desktop ? const Alignment(0, .1) : const Alignment(0, -.35),
               excludeFromSemantics: true,
             ),
           ),
@@ -114,7 +112,7 @@ Widget home() {
           ),
         ],
       ),
-    ))),
+    ),
     const SizedBox(height: 22),
     Text('Ваш чайный путь', style: serif(25)),
     const SizedBox(height: 10),
