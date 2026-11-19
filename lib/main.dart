@@ -76,11 +76,18 @@ Widget homeAction(
   );
 }
 
-Widget home() => Column(
+Widget home() {
+  final platform = Theme.of(context).platform;
+  final desktop = MediaQuery.sizeOf(context).width > 600 &&
+      platform != TargetPlatform.iOS &&
+      platform != TargetPlatform.android;
+  return Column(
   crossAxisAlignment: CrossAxisAlignment.stretch,
   children: [
     heading('Чайный компас', 'Чай · люди · места · культура'),
-    ClipRRect(
+    Center(child: ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: desktop ? 360 : double.infinity),
+      child: ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -107,7 +114,7 @@ Widget home() => Column(
           ),
         ],
       ),
-    ),
+    ))),
     const SizedBox(height: 22),
     Text('Ваш чайный путь', style: serif(25)),
     const SizedBox(height: 10),
@@ -126,6 +133,7 @@ Widget home() => Column(
     if (FeedApi.enabled) ...[const SizedBox(height: 16), const SocialFeed()],
   ],
 );
+}
 Widget master()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[heading('Мастер Чи','Ваш проводник в мире чая'),Card(child:Padding(padding:const EdgeInsets.all(22),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Чай начинается\nс внимания.',style:serif(28)),const SizedBox(height:12),const Text('Выберите чай в энциклопедии, а затем запишите свои ощущения после каждого пролива.'),const SizedBox(height:12),TextButton(onPressed:()=>setState(()=>page=4),child:const Text('Выбрать чай →'))]))),const SizedBox(height:20),Text('Скоро появится',style:serif(22)),block('Распознать по фото','Помощь с чаем и этикеткой',Icons.camera_alt_outlined,coming),block('Подобрать чай','Чай под ваше настроение',Icons.spa_outlined,coming),block('Задать вопрос','Поговорить с Мастером Чи',Icons.chat_bubble_outline,coming)]);
 void coming()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Эта возможность появится позже')));
 Future<void> shareEntry(Map<String, dynamic> entry) async {
