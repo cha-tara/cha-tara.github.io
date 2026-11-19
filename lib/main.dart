@@ -22,7 +22,109 @@ void category(int i){Navigator.push(context,MaterialPageRoute(builder:(ctx)=>Sca
 TextStyle serif(double size,{Color color=ink})=>TextStyle(fontFamily:'Georgia',fontSize:size,color:color,height:1.08);
 Widget heading(String title,String subtitle)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:serif(34)),const SizedBox(height:8),Text(subtitle,style:const TextStyle(color:Color(0xff77786b),fontSize:14)),const SizedBox(height:24)]);
 Widget block(String title,String sub,IconData icon,VoidCallback onTap)=>Card(child:ListTile(contentPadding:const EdgeInsets.symmetric(horizontal:18,vertical:10),leading:CircleAvatar(backgroundColor:const Color(0xffe2dfcd),child:Icon(icon,color:green)),title:Text(title,style:serif(21)),subtitle:Padding(padding:const EdgeInsets.only(top:6),child:Text(sub)),trailing:const Icon(Icons.arrow_forward_ios,size:16),onTap:onTap));
-Widget home()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[heading('Чайный компас','Чай · люди · места · культура'),ClipRRect(borderRadius:BorderRadius.circular(22),child:Stack(alignment:Alignment.bottomLeft,children:[Image.asset('assets/brand.jpg',height:220,width:double.infinity,fit:BoxFit.cover),Container(height:220,decoration:const BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.transparent,Colors.black87]))),const Padding(padding:EdgeInsets.all(20),child:Text('В каждой чашке чая\nскрыта тишина мира.',style:TextStyle(fontFamily:'Georgia',fontSize:25,color:Colors.white)))])),const SizedBox(height:22),Text('Ваш чайный путь',style:serif(25)),const SizedBox(height:8),block('Начать сессию','Заварите чай и сохраните впечатления',Icons.local_fire_department_outlined,()=>setState(()=>page=3)),block('Открыть энциклопедию','Исследуйте мир чайных вкусов',Icons.menu_book_outlined,()=>setState(()=>page=4)),if(FeedApi.enabled) ...[const SizedBox(height:24),const SocialFeed()]]);
+Widget homeAction(
+  String title,
+  String subtitle,
+  IconData icon,
+  VoidCallback onTap,
+) {
+  return Card(
+    margin: const EdgeInsets.only(bottom: 8),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 252 ||
+              MediaQuery.textScalerOf(context).scale(19) > 23;
+          final badge = CircleAvatar(
+            radius: 16,
+            backgroundColor: const Color(0xffe2dfcd),
+            child: Icon(icon, size: 18, color: green),
+          );
+          const arrow = Icon(Icons.chevron_right, size: 19, color: green);
+          final copy = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: serif(19)),
+              const SizedBox(height: 4),
+              Text(subtitle, style: const TextStyle(fontSize: 14, height: 1.3)),
+            ],
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [badge, arrow]),
+                const SizedBox(height: 8),
+                copy,
+              ],
+            );
+          }
+          return Row(children: [
+            badge,
+            const SizedBox(width: 12),
+            Expanded(child: copy),
+            const SizedBox(width: 8),
+            arrow,
+          ]);
+        }),
+      ),
+    ),
+  );
+}
+
+Widget home() => Column(
+  crossAxisAlignment: CrossAxisAlignment.stretch,
+  children: [
+    heading('Чайный компас', 'Чай · люди · места · культура'),
+    ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AspectRatio(
+            aspectRatio: 1.7,
+            child: Image.asset(
+              'assets/brand.jpg',
+              fit: BoxFit.cover,
+              alignment: const Alignment(0, -.24),
+              excludeFromSemantics: true,
+            ),
+          ),
+          ColoredBox(
+            color: const Color(0xff342e22),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              child: Text(
+                'В каждой чашке чая скрыта тишина мира.',
+                textAlign: TextAlign.center,
+                style: serif(20, color: const Color(0xfff5eddb)).copyWith(height: 1.25),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+    const SizedBox(height: 22),
+    Text('Ваш чайный путь', style: serif(25)),
+    const SizedBox(height: 10),
+    homeAction(
+      'Начать сессию',
+      'Заварите чай и сохраните впечатления',
+      Icons.local_fire_department_outlined,
+      () => setState(() => page = 3),
+    ),
+    homeAction(
+      'Открыть энциклопедию',
+      'Исследуйте мир чайных вкусов',
+      Icons.menu_book_outlined,
+      () => setState(() => page = 4),
+    ),
+    if (FeedApi.enabled) ...[const SizedBox(height: 16), const SocialFeed()],
+  ],
+);
 Widget master()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[heading('Мастер Чи','Ваш проводник в мире чая'),Card(child:Padding(padding:const EdgeInsets.all(22),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Чай начинается\nс внимания.',style:serif(28)),const SizedBox(height:12),const Text('Выберите чай в энциклопедии, а затем запишите свои ощущения после каждого пролива.'),const SizedBox(height:12),TextButton(onPressed:()=>setState(()=>page=4),child:const Text('Выбрать чай →'))]))),const SizedBox(height:20),Text('Скоро появится',style:serif(22)),block('Распознать по фото','Помощь с чаем и этикеткой',Icons.camera_alt_outlined,coming),block('Подобрать чай','Чай под ваше настроение',Icons.spa_outlined,coming),block('Задать вопрос','Поговорить с Мастером Чи',Icons.chat_bubble_outline,coming)]);
 void coming()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Эта возможность появится позже')));
 Future<void> shareEntry(Map<String, dynamic> entry) async {
