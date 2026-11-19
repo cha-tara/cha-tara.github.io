@@ -231,24 +231,30 @@ Widget build(BuildContext context) {
       : compactNavigationLabelStyle(context, barWidth);
 
   return Scaffold(
-    appBar: AppBar(
-      backgroundColor: paper,
-      centerTitle: true,
-      title: const Text(
-        'C H A   ✦   T A R A',
-        style: TextStyle(fontFamily: 'Georgia', fontSize: 16, letterSpacing: 1.5),
-      ),
-    ),
-    body: Align(
-      alignment: page == 2 ? Alignment.topCenter : Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: pageWidth),
-        child: SingleChildScrollView(
-          key: ValueKey(page),
-          padding: const EdgeInsets.fromLTRB(pageInset, 12, pageInset, 32),
-          child: pages[page](),
+    body: CustomScrollView(
+      key: ValueKey(page),
+      slivers: [
+        const SliverAppBar(
+          backgroundColor: paper,
+          centerTitle: true,
+          floating: true,
+          title: Text(
+            'C H A   ✦   T A R A',
+            style: TextStyle(fontFamily: 'Georgia', fontSize: 16, letterSpacing: 1.5),
+          ),
         ),
-      ),
+        SliverToBoxAdapter(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: pageWidth),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(pageInset, 12, pageInset, 32),
+                child: pages[page](),
+              ),
+            ),
+          ),
+        ),
+      ],
     ),
     bottomNavigationBar: Align(
       alignment: Alignment.bottomCenter,
