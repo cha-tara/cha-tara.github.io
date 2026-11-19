@@ -99,7 +99,7 @@ Widget home() => Column(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
               child: Text(
-                'В каждой чашке чая скрыта тишина мира.',
+                'В каждой чашке чая скрыта тишина мира',
                 textAlign: TextAlign.center,
                 style: serif(20, color: const Color(0xfff5eddb)).copyWith(height: 1.25),
               ),
