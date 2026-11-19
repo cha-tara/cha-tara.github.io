@@ -2,14 +2,19 @@ import hashlib
 import json
 import os
 import re
+import secrets
+import time
+from collections import OrderedDict
 import sqlite3
 from contextlib import asynccontextmanager, closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import BoundedSemaphore, Lock
 from typing import Annotated
 
-from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 from pydantic import BaseModel, Field, StringConstraints
 
 database = Path(os.getenv("CHA_TARA_DB", "cha-tara.sqlite3"))
@@ -28,6 +33,19 @@ async def lifespan(_app):
     with connect() as db:
         db.execute("PRAGMA journal_mode=WAL")
         db.executescript("""
+            CREATE TABLE IF NOT EXISTS accounts (
+                id TEXT PRIMARY KEY,
+                login TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                salt BLOB NOT NULL,
+                password_hash BLOB NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                token_hash TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                expires_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
             CREATE TABLE IF NOT EXISTS posts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 author_id TEXT NOT NULL,
@@ -49,7 +67,38 @@ async def lifespan(_app):
     yield
 
 
+class LimitRequestBody:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] not in ("POST", "PUT"):
+            await self.app(scope, receive, send)
+            return
+        limit = 2048 if scope["path"].startswith("/v1/auth/") else 256 * 1024
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            chunk = message.get("body", b"")
+            if len(body) + len(chunk) > limit:
+                await JSONResponse({"detail": "Request too large"}, status_code=413)(
+                    scope, receive, send
+                )
+                return
+            body.extend(chunk)
+            if not message.get("more_body", False):
+                break
+
+        async def receive_body():
+            return {"type": "http.request", "body": bytes(body), "more_body": False}
+
+        await self.app(scope, receive_body, send)
+
+
 app = FastAPI(title="Cha Tara", lifespan=lifespan, docs_url=None, redoc_url=None)
+app.add_middleware(LimitRequestBody)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CHA_TARA_ORIGINS", "https://cha-tara.github.io").split(","),
@@ -60,7 +109,6 @@ app.add_middleware(
 
 class Post(BaseModel):
     request_id: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
     tea: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
     notes: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] = ""
     descriptors: list[Annotated[str, StringConstraints(max_length=140)]] = Field(
@@ -71,12 +119,104 @@ class Post(BaseModel):
 Authorization = Annotated[str | None, Header()]
 
 
-def actor(authorization, required=False):
-    if not authorization and not required:
-        return None
+class Credentials(BaseModel):
+    login: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, pattern=r"^[a-z0-9_]{3,32}$")]
+    password: Annotated[str, StringConstraints(min_length=10, max_length=128)]
+
+
+class Registration(Credentials):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+
+
+auth_slots = BoundedSemaphore(1)
+auth_lock = Lock()
+attempts = OrderedDict()
+
+
+def check_auth_rate(request: Request):
+    ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    with auth_lock:
+        count, reset = attempts.pop(ip, (0, now + 60))
+        if now >= reset:
+            count, reset = 0, now + 60
+        attempts[ip] = (count + 1, reset)
+        if len(attempts) > 2048:
+            attempts.popitem(last=False)
+    if count >= 8:
+        raise HTTPException(429, "Too many requests")
+
+
+def password_hash(password, salt):
+    if not auth_slots.acquire(blocking=False):
+        raise HTTPException(429, "Try again")
+    try:
+        return hashlib.scrypt(password.encode(), salt=salt, n=32768, r=8, p=1,
+                              maxmem=64 * 1024 * 1024)
+    finally:
+        auth_slots.release()
+
+
+def token_hash(authorization):
     if not authorization or not re.fullmatch(r"Bearer [0-9a-f]{64}", authorization):
-        raise HTTPException(401, "Invalid browser credential")
+        raise HTTPException(401, "Sign in required")
     return hashlib.sha256(bytes.fromhex(authorization[7:])).hexdigest()
+
+
+def actor(authorization, required=False):
+    if authorization is None and not required:
+        return None
+    with connect() as db:
+        account = db.execute("""
+            SELECT a.id, a.name FROM accounts a JOIN sessions s ON s.account_id=a.id
+            WHERE s.token_hash=? AND s.expires_at > ?
+        """, (token_hash(authorization), int(time.time()))).fetchone()
+    if account is None:
+        raise HTTPException(401, "Sign in required")
+    return account
+
+
+def create_session(db, account_id, name, response):
+    token = secrets.token_hex(32)
+    now = int(time.time())
+    db.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))
+    db.execute("INSERT INTO sessions VALUES (?, ?, ?)",
+               (token_hash("Bearer " + token), account_id, now + 7 * 86400))
+    response.headers["Cache-Control"] = "no-store"
+    return {"token": token, "name": name}
+
+
+@app.post("/v1/auth/register", status_code=201)
+def register(data: Registration, request: Request, response: Response):
+    check_auth_rate(request)
+    account_id, salt = secrets.token_hex(16), secrets.token_bytes(16)
+    digest = password_hash(data.password, salt)
+    with connect() as db:
+        result = db.execute("""
+            INSERT INTO accounts VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(login) DO NOTHING
+        """, (account_id, data.login, data.name, salt, digest))
+        if not result.rowcount:
+            raise HTTPException(409, "Login already exists")
+        return create_session(db, account_id, data.name, response)
+
+
+@app.post("/v1/auth/login")
+def login(data: Credentials, request: Request, response: Response):
+    check_auth_rate(request)
+    with connect() as db:
+        account = db.execute("SELECT * FROM accounts WHERE login=?", (data.login,)).fetchone()
+    digest = password_hash(data.password, account["salt"] if account else bytes(16))
+    if account is None or not secrets.compare_digest(account["password_hash"], digest):
+        raise HTTPException(401, "Invalid login or password")
+    with connect() as db:
+        return create_session(db, account["id"], account["name"], response)
+
+
+@app.delete("/v1/auth/session", status_code=204)
+def logout(authorization: Authorization = None):
+    with connect() as db:
+        db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash(authorization),))
 
 
 @app.get("/health")
@@ -93,7 +233,8 @@ def feed(
     before: Annotated[int | None, Query(gt=0)] = None,
     authorization: Authorization = None,
 ):
-    reader = actor(authorization)
+    account = actor(authorization)
+    reader = account["id"] if account else None
     response.headers["Cache-Control"] = "no-store"
     with connect() as db:
         rows = db.execute("""
@@ -120,14 +261,15 @@ def feed(
 
 @app.post("/v1/posts", status_code=201)
 def publish(post: Post, authorization: Authorization = None):
-    owner = actor(authorization, required=True)
+    account = actor(authorization, required=True)
+    owner = account["id"]
     with connect() as db:
         db.execute("""
             INSERT INTO posts (author_id, request_id, name, tea, notes, descriptors, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(author_id, request_id) DO NOTHING
         """, (
-            owner, post.request_id, post.name, post.tea, post.notes,
+            owner, post.request_id, account["name"], post.tea, post.notes,
             json.dumps(post.descriptors, ensure_ascii=False),
             datetime.now(UTC).isoformat(),
         ))
@@ -140,7 +282,8 @@ def publish(post: Post, authorization: Authorization = None):
 
 @app.delete("/v1/posts/{post_id}", status_code=204)
 def delete_post(post_id: int, authorization: Authorization = None):
-    owner = actor(authorization, required=True)
+    account = actor(authorization, required=True)
+    owner = account["id"]
     with connect() as db:
         result = db.execute("DELETE FROM posts WHERE id=? AND author_id=?", (post_id, owner))
         if not result.rowcount:
@@ -149,7 +292,7 @@ def delete_post(post_id: int, authorization: Authorization = None):
 
 @app.put("/v1/follows/{author}", status_code=204)
 def follow(author: str, authorization: Authorization = None):
-    reader = actor(authorization, required=True)
+    reader = actor(authorization, required=True)["id"]
     if author == reader:
         raise HTTPException(400, "Cannot follow yourself")
     with connect() as db:
@@ -165,6 +308,6 @@ def follow(author: str, authorization: Authorization = None):
 
 @app.delete("/v1/follows/{author}", status_code=204)
 def unfollow(author: str, authorization: Authorization = None):
-    reader = actor(authorization, required=True)
+    reader = actor(authorization, required=True)["id"]
     with connect() as db:
         db.execute("DELETE FROM follows WHERE reader=? AND author=?", (reader, author))

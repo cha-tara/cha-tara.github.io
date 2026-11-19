@@ -25,6 +25,7 @@ Widget home()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[head
 Widget master()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[heading('Мастер Чи','Ваш проводник в мире чая'),Card(child:Padding(padding:const EdgeInsets.all(22),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Чай начинается\nс внимания.',style:serif(28)),const SizedBox(height:12),const Text('Выберите чай в энциклопедии, а затем запишите свои ощущения после каждого пролива.'),const SizedBox(height:12),TextButton(onPressed:()=>setState(()=>page=4),child:const Text('Выбрать чай →'))]))),const SizedBox(height:20),Text('Скоро появится',style:serif(22)),block('Распознать по фото','Помощь с чаем и этикеткой',Icons.camera_alt_outlined,coming),block('Подобрать чай','Чай под ваше настроение',Icons.spa_outlined,coming),block('Задать вопрос','Поговорить с Мастером Чи',Icons.chat_bubble_outline,coming)]);
 void coming()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Эта возможность появится позже')));
 Future<void> shareEntry(Map<String, dynamic> entry) async {
+  if (!await FeedApi.requireAccount(context) || !mounted) return;
   final shared = await showDialog<bool>(
     context: context,
     barrierDismissible: false,

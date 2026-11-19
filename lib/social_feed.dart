@@ -3,11 +3,35 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 class FeedApi {
   static const baseUrl = String.fromEnvironment('CHA_TARA_API_URL');
   static bool get enabled => baseUrl.isNotEmpty;
+  static String? _token;
+  static String? accountName;
+
+  static Future<bool> requireAccount(BuildContext context) async {
+    if (accountName != null) return true;
+    return await showDialog<bool>(
+          context: context,
+          builder: (_) => const FeedSignIn(),
+        ) ==
+        true;
+  }
+
+  Future<void> authenticate(
+      String path, Map<String, Object> credentials) async {
+    final response = await request('POST', 'auth/$path', data: credentials);
+    final account = jsonDecode(utf8.decode(response.bodyBytes)) as Map;
+    _token = account['token'] as String;
+    accountName = account['name'] as String;
+  }
+
+  Future<void> signOut() async {
+    await request('DELETE', 'auth/session');
+    _token = null;
+    accountName = null;
+  }
 
   static String randomHex(int size) {
     final random = Random.secure();
@@ -28,15 +52,7 @@ class FeedApi {
     if (endpoint.host.isEmpty || (endpoint.scheme != 'https' && !local)) {
       throw StateError('Invalid feed API URL');
     }
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'feed-token@${endpoint.origin}';
-    var token = prefs.getString(key);
-    if (token == null && method != 'GET') {
-      token = randomHex(32);
-      if (!await prefs.setString(key, token)) {
-        throw StateError('Cannot save browser credential');
-      }
-    }
+    final token = _token;
 
     final url = endpoint.replace(
       path: '${endpoint.path.replaceFirst(RegExp(r'/+$'), '')}/v1/$path',
@@ -55,13 +71,154 @@ class FeedApi {
           .then(http.Response.fromStream)
           .timeout(const Duration(seconds: 12));
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError('Feed API HTTP ${response.statusCode}');
+        if (response.statusCode == 401 &&
+            !path.startsWith('auth/') &&
+            _token == token) {
+          _token = null;
+          accountName = null;
+        }
+        throw FeedError(response.statusCode);
       }
       return response;
     } finally {
       client.close();
     }
   }
+}
+
+class FeedError implements Exception {
+  final int status;
+  const FeedError(this.status);
+}
+
+class FeedSignIn extends StatefulWidget {
+  const FeedSignIn({super.key});
+
+  @override
+  State<FeedSignIn> createState() => _FeedSignInState();
+}
+
+class _FeedSignInState extends State<FeedSignIn> {
+  final form = GlobalKey<FormState>();
+  final login = TextEditingController();
+  final password = TextEditingController();
+  final name = TextEditingController();
+  bool register = false;
+  bool sending = false;
+  String? error;
+
+  @override
+  void dispose() {
+    login.dispose();
+    password.dispose();
+    name.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (!form.currentState!.validate()) return;
+    setState(() {
+      sending = true;
+      error = null;
+    });
+    try {
+      await FeedApi().authenticate(register ? 'register' : 'login', {
+        'login': login.text.trim().toLowerCase(),
+        'password': password.text,
+        if (register) 'name': name.text.trim(),
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (failure) {
+      if (!mounted) return;
+      setState(() {
+        sending = false;
+        error = switch (failure is FeedError ? failure.status : 0) {
+          401 => 'Проверьте логин и пароль.',
+          409 => 'Этот логин уже занят.',
+          429 => 'Слишком много попыток. Попробуйте через минуту.',
+          _ => 'Не удалось подключиться. Попробуйте ещё раз.',
+        };
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: !sending,
+        child: AlertDialog(
+          title: Text(register ? 'Создать аккаунт' : 'Войти в Cha Tara'),
+          scrollable: true,
+          content: Form(
+            key: form,
+            child: AutofillGroup(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (register) ...[
+                  TextFormField(
+                    controller: name,
+                    enabled: !sending,
+                    maxLength: 40,
+                    decoration: const InputDecoration(labelText: 'Имя в ленте'),
+                    validator: (value) =>
+                        value!.trim().isEmpty ? 'Введите имя' : null,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                TextFormField(
+                  controller: login,
+                  enabled: !sending,
+                  autofillHints: const [AutofillHints.username],
+                  autocorrect: false,
+                  decoration: const InputDecoration(labelText: 'Логин'),
+                  validator: (value) =>
+                      RegExp(r'^[a-zA-Z0-9_]{3,32}$').hasMatch(value!.trim())
+                          ? null
+                          : 'От 3 до 32 латинских букв, цифр или _',
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: password,
+                  enabled: !sending,
+                  obscureText: true,
+                  autofillHints: [
+                    register
+                        ? AutofillHints.newPassword
+                        : AutofillHints.password
+                  ],
+                  decoration: const InputDecoration(labelText: 'Пароль'),
+                  validator: (value) =>
+                      value!.length >= 10 && value.length <= 128
+                          ? null
+                          : 'От 10 до 128 символов',
+                ),
+                if (error != null)
+                  Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(error!)),
+                TextButton(
+                    onPressed: sending
+                        ? null
+                        : () => setState(() {
+                              register = !register;
+                              error = null;
+                            }),
+                    child: Text(register
+                        ? 'У меня уже есть аккаунт'
+                        : 'Создать аккаунт')),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: sending ? null : () => Navigator.pop(context),
+                child: const Text('Отмена')),
+            FilledButton(
+                onPressed: sending ? null : submit,
+                child: Text(sending
+                    ? 'Подключаемся…'
+                    : (register ? 'Создать' : 'Войти'))),
+          ],
+        ),
+      );
 }
 
 class SocialFeed extends StatefulWidget {
@@ -137,6 +294,35 @@ class _SocialFeedState extends State<SocialFeed> {
         Expanded(
             child: Text('Чайная лента',
                 style: Theme.of(context).textTheme.headlineSmall)),
+        TextButton(
+          onPressed: busy
+              ? null
+              : () async {
+                  if (FeedApi.accountName == null) {
+                    if (await FeedApi.requireAccount(context) && mounted)
+                      await load();
+                  } else {
+                    setState(() => changing = true);
+                    try {
+                      await api.signOut();
+                      if (mounted) {
+                        setState(() => following = false);
+                        await load();
+                      }
+                    } catch (_) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Не удалось завершить сеанс.')),
+                        );
+                      }
+                    } finally {
+                      if (mounted) setState(() => changing = false);
+                    }
+                  }
+                },
+          child: Text(FeedApi.accountName == null ? 'Войти' : 'Выйти'),
+        ),
         IconButton(
           tooltip: 'Обновить ленту',
           onPressed: busy ? null : () => load(),
@@ -212,6 +398,8 @@ class _SocialFeedState extends State<SocialFeed> {
                           if (confirmed == true && mounted)
                             await change('DELETE', 'posts/${post['id']}');
                         } else {
+                          if (!await FeedApi.requireAccount(context) ||
+                              !mounted) return;
                           await change(
                               post['followed'] == true ? 'DELETE' : 'PUT',
                               'follows/${post['author_id']}');
@@ -243,23 +431,15 @@ class PublishTeaSession extends StatefulWidget {
 }
 
 class _PublishTeaSessionState extends State<PublishTeaSession> {
-  final name = TextEditingController();
-  final form = GlobalKey<FormState>();
   final requestId = FeedApi.randomHex(16);
   bool includeNotes = false;
   bool includeDescriptors = false;
   bool sending = false;
   bool failed = false;
 
-  @override
-  void dispose() {
-    name.dispose();
-    super.dispose();
-  }
-
   Future<void> publish(
       String tea, String notes, List<String> descriptors) async {
-    if (!form.currentState!.validate()) return;
+    if (!await FeedApi.requireAccount(context) || !mounted) return;
     setState(() {
       sending = true;
       failed = false;
@@ -267,7 +447,6 @@ class _PublishTeaSessionState extends State<PublishTeaSession> {
     try {
       await FeedApi().request('POST', 'posts', data: {
         'request_id': requestId,
-        'name': name.text.trim(),
         'tea': tea,
         if (includeNotes) 'notes': notes,
         if (includeDescriptors) 'descriptors': descriptors,
@@ -294,48 +473,37 @@ class _PublishTeaSessionState extends State<PublishTeaSession> {
       child: AlertDialog(
         title: const Text('Поделиться сессией'),
         scrollable: true,
-        content: Form(
-            key: form,
-            child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('В публичной ленте появится «$tea».'),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: name,
-                    enabled: !sending,
-                    maxLength: 40,
-                    decoration: const InputDecoration(labelText: 'Имя в ленте'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Введите имя'
-                        : null,
-                  ),
-                  if (notes.trim().isNotEmpty)
-                    CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: includeNotes,
-                        onChanged: sending
-                            ? null
-                            : (v) => setState(() => includeNotes = v ?? false),
-                        title: const Text('Включить заметку'),
-                        subtitle: Text(notes,
-                            maxLines: 3, overflow: TextOverflow.ellipsis)),
-                  if (descriptors.isNotEmpty)
-                    CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: includeDescriptors,
-                        onChanged: sending
-                            ? null
-                            : (v) =>
-                                setState(() => includeDescriptors = v ?? false),
-                        title: const Text('Включить дескрипторы'),
-                        subtitle: Text(descriptors.join(' · '),
-                            maxLines: 3, overflow: TextOverflow.ellipsis)),
-                  if (failed)
-                    const Text(
-                        'Не удалось опубликовать запись. Проверьте соединение и попробуйте ещё раз.'),
-                ])),
+        content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  'В публичной ленте появится «$tea» от имени ${FeedApi.accountName}.'),
+              if (notes.trim().isNotEmpty)
+                CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includeNotes,
+                    onChanged: sending
+                        ? null
+                        : (v) => setState(() => includeNotes = v ?? false),
+                    title: const Text('Включить заметку'),
+                    subtitle: Text(notes,
+                        maxLines: 3, overflow: TextOverflow.ellipsis)),
+              if (descriptors.isNotEmpty)
+                CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includeDescriptors,
+                    onChanged: sending
+                        ? null
+                        : (v) =>
+                            setState(() => includeDescriptors = v ?? false),
+                    title: const Text('Включить дескрипторы'),
+                    subtitle: Text(descriptors.join(' · '),
+                        maxLines: 3, overflow: TextOverflow.ellipsis)),
+              if (failed)
+                const Text(
+                    'Не удалось опубликовать запись. Проверьте соединение и попробуйте ещё раз.'),
+            ]),
         actions: [
           TextButton(
               onPressed: sending ? null : () => Navigator.pop(context),
