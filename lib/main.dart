@@ -221,7 +221,7 @@ Widget build(BuildContext context) {
       platform != TargetPlatform.iOS &&
       platform != TargetPlatform.android;
   final labelStyle = largeNavigationLabels
-      ? const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ink)
+      ? const TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: ink)
       : compactNavigationLabelStyle(context, barWidth);
 
   return Scaffold(
@@ -250,7 +250,7 @@ Widget build(BuildContext context) {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: barWidth),
         child: NavigationBar(
-          height: largeNavigationLabels ? 80 : 72,
+          height: 72,
           labelTextStyle: WidgetStatePropertyAll(labelStyle),
           backgroundColor: const Color(0xffe9e4d5),
           indicatorColor: const Color(0xffd7deca),
