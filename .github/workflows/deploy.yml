@@ -21,12 +21,9 @@ jobs:
           cache: true
       - run: flutter create --platforms=web .
       - run: flutter pub get
-      - run: flutter build web --release --web-content-hash --base-href / --dart-define="CHA_TARA_API_URL=$CHA_TARA_API_URL"
+      - run: flutter build web --release --base-href / --dart-define="CHA_TARA_API_URL=$CHA_TARA_API_URL"
         env:
           CHA_TARA_API_URL: ${{ vars.CHA_TARA_API_URL }}
-      - name: Version the web bootstrap
-        run: |
-          sed -i "s|src=\"flutter_bootstrap.js\"|src=\"flutter_bootstrap.js?v=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\"|" build/web/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
