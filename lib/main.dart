@@ -171,4 +171,56 @@ Widget diary() => TeaDiary(
 Widget field(String label,TextEditingController controller,String suffix)=>Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Padding(padding:const EdgeInsets.only(left:4,bottom:6),child:Text(label,style:const TextStyle(fontSize:13,color:green))),TextField(controller:controller,keyboardType:TextInputType.number,decoration:InputDecoration(suffixText:suffix,contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:14),isDense:true))]));
 Widget session()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[heading('Чайная сессия','Найдите время для себя'),Card(child:ListTile(contentPadding:const EdgeInsets.all(16),title:Text(selected.isEmpty?'Выберите чай':selected,style:serif(24)),subtitle:Text(selected.isEmpty?'Из энциклопедии или введите свой':'Выбранный чай'),trailing:TextButton(onPressed:()=>setState(()=>page=4),child:const Text('Выбрать')))),const SizedBox(height:12),TextField(controller:custom,decoration:InputDecoration(hintText:'Или введите свой чай',suffixIcon:IconButton(icon:const Icon(Icons.arrow_forward),onPressed:(){if(custom.text.trim().isNotEmpty)setState(()=>selected=custom.text.trim());})),onSubmitted:(s){if(s.trim().isNotEmpty)setState(()=>selected=s.trim());}),const SizedBox(height:24),Text('Параметры заваривания',style:serif(24)),const SizedBox(height:12),Row(crossAxisAlignment:CrossAxisAlignment.start,children:[field('Чай',grams,'г'),const SizedBox(width:10),field('Вода',water,'мл')]),const SizedBox(height:16),Row(crossAxisAlignment:CrossAxisAlignment.start,children:[field('Температура',temp,'°C'),const SizedBox(width:10),field('Время',seconds,'сек')]),const SizedBox(height:24),Text('Пролив',style:serif(25)),const SizedBox(height:8),Wrap(spacing:8,children:List.generate(5,(i)=>ChoiceChip(label:Text('${i+1}'),selected:infusion==i+1,onSelected:(_)=>setState(()=>infusion=i+1)))),const SizedBox(height:20),Text('Впечатления',style:serif(25)),const SizedBox(height:10),Wrap(spacing:7,children:['Аромат','Вкус','Послевкусие'].map((t)=>ChoiceChip(label:Text(t),selected:tab==t,onSelected:(_)=>setState(()=>tab=t))).toList()),const SizedBox(height:12),DescriptorWheel(type:tab,infusion:infusion,selected:descriptors,onChanged:(key,value)=>setState((){if(value){descriptors.add(key);}else{descriptors.remove(key);}})),const SizedBox(height:12),TextField(controller:notes,maxLines:3,decoration:const InputDecoration(hintText:'Ваши заметки о чае...')),const SizedBox(height:18),SizedBox(width:double.infinity,child:FilledButton(onPressed:save,style:FilledButton.styleFrom(backgroundColor:green,padding:const EdgeInsets.all(16)),child:const Text('Сохранить сессию')))]);
 Widget catalog()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[heading('Энциклопедия чая','Откройте мир вкусов и чайной культуры'),TextField(controller:searchController,onChanged:(v)=>setState(()=>query=v.trim().toLowerCase()),decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'Найти чай или категорию')),const SizedBox(height:18),...List.generate(categories.length,(i){final matches=teas[categories[i]]!.where((t)=>t.toLowerCase().contains(query)).toList(); if(query.isNotEmpty&&!categories[i].toLowerCase().contains(query)&&matches.isEmpty)return const SizedBox.shrink();return Padding(padding:const EdgeInsets.only(bottom:8),child:Material(color:colors[i],borderRadius:BorderRadius.circular(16),child:InkWell(borderRadius:BorderRadius.circular(16),onTap:()=>category(i),child:Container(height:105,padding:const EdgeInsets.symmetric(horizontal:18),child:Row(children:[Text(symbols[i],style:serif(40,color:i==0||i==2?ink:Colors.white)),const SizedBox(width:18),Expanded(child:Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.start,children:[Text(categories[i],style:serif(23,color:i==0||i==2?ink:Colors.white)),const SizedBox(height:7),Text(descriptions[i],maxLines:2,style:TextStyle(fontSize:11,color:i==0||i==2?ink:Colors.white70,letterSpacing:.3))])),Icon(Icons.arrow_forward_ios,size:18,color:i==0||i==2?ink:Colors.white)])))));})]);
-@override Widget build(BuildContext c){final pages=[home,master,diary,session,catalog];return Scaffold(appBar:AppBar(backgroundColor:paper,centerTitle:true,title:const Text('C H A   ✦   T A R A',style:TextStyle(fontFamily:'Georgia',fontSize:16,letterSpacing:1.5))),body:Align(alignment: page == 2 ? Alignment.topCenter : Alignment.center, child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:600),child:SingleChildScrollView(key:ValueKey(page),padding:const EdgeInsets.fromLTRB(20,12,20,32),child:pages[page]()))),bottomNavigationBar:NavigationBar(height:72,backgroundColor:const Color(0xffe9e4d5),indicatorColor:const Color(0xffd7deca),selectedIndex:page,onDestinationSelected:(i)=>setState(()=>page=i),destinations:const [NavigationDestination(icon:Icon(Icons.home_outlined),label:'Лента'),NavigationDestination(icon:Icon(Icons.spa_outlined),label:'Мастер Чи'),NavigationDestination(icon:Icon(Icons.auto_stories_outlined),label:'Дневник'),NavigationDestination(icon:Icon(Icons.local_fire_department_outlined),label:'Сессия'),NavigationDestination(icon:Icon(Icons.school_outlined),label:'Чай')]));}}
+@override
+Widget build(BuildContext context) {
+  const pageWidth = 600.0;
+  const pageInset = 20.0;
+  final pages = [home, master, diary, session, catalog];
+  final wideLayout = MediaQuery.sizeOf(context).width > pageWidth;
+
+  return Scaffold(
+    appBar: AppBar(
+      backgroundColor: paper,
+      centerTitle: true,
+      title: const Text(
+        'C H A   ✦   T A R A',
+        style: TextStyle(fontFamily: 'Georgia', fontSize: 16, letterSpacing: 1.5),
+      ),
+    ),
+    body: Align(
+      alignment: page == 2 ? Alignment.topCenter : Alignment.center,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: pageWidth),
+        child: SingleChildScrollView(
+          key: ValueKey(page),
+          padding: const EdgeInsets.fromLTRB(pageInset, 12, pageInset, 32),
+          child: pages[page](),
+        ),
+      ),
+    ),
+    bottomNavigationBar: Align(
+      alignment: Alignment.bottomCenter,
+      heightFactor: 1,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: wideLayout ? pageWidth - 2 * pageInset : pageWidth,
+        ),
+        child: NavigationBar(
+          height: 72,
+          backgroundColor: const Color(0xffe9e4d5),
+          indicatorColor: const Color(0xffd7deca),
+          selectedIndex: page,
+          onDestinationSelected: (index) => setState(() => page = index),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Лента'),
+            NavigationDestination(icon: Icon(Icons.spa_outlined), label: 'Мастер Чи'),
+            NavigationDestination(icon: Icon(Icons.auto_stories_outlined), label: 'Дневник'),
+            NavigationDestination(icon: Icon(Icons.local_fire_department_outlined), label: 'Сессия'),
+            NavigationDestination(icon: Icon(Icons.school_outlined), label: 'Чай'),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+}
