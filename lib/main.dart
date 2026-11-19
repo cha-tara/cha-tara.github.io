@@ -177,6 +177,7 @@ Widget build(BuildContext context) {
   const pageInset = 20.0;
   final pages = [home, master, diary, session, catalog];
   final wideLayout = MediaQuery.sizeOf(context).width > pageWidth;
+  final navigationTheme = NavigationBarTheme.of(context);
 
   return Scaffold(
     appBar: AppBar(
@@ -205,19 +206,28 @@ Widget build(BuildContext context) {
         constraints: BoxConstraints(
           maxWidth: wideLayout ? pageWidth - 2 * pageInset : pageWidth,
         ),
-        child: NavigationBar(
-          height: 72,
-          backgroundColor: const Color(0xffe9e4d5),
-          indicatorColor: const Color(0xffd7deca),
-          selectedIndex: page,
-          onDestinationSelected: (index) => setState(() => page = index),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Лента'),
-            NavigationDestination(icon: Icon(Icons.spa_outlined), label: 'Мастер Чи'),
-            NavigationDestination(icon: Icon(Icons.auto_stories_outlined), label: 'Дневник'),
-            NavigationDestination(icon: Icon(Icons.local_fire_department_outlined), label: 'Сессия'),
-            NavigationDestination(icon: Icon(Icons.school_outlined), label: 'Чай'),
-          ],
+        child: NavigationBarTheme(
+          data: wideLayout
+              ? navigationTheme.copyWith(
+                  labelTextStyle: const WidgetStatePropertyAll(
+                    TextStyle(fontSize: 14),
+                  ),
+                )
+              : navigationTheme,
+          child: NavigationBar(
+            height: 72,
+            backgroundColor: const Color(0xffe9e4d5),
+            indicatorColor: const Color(0xffd7deca),
+            selectedIndex: page,
+            onDestinationSelected: (index) => setState(() => page = index),
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Лента'),
+              NavigationDestination(icon: Icon(Icons.spa_outlined), label: 'Мастер Чи'),
+              NavigationDestination(icon: Icon(Icons.auto_stories_outlined), label: 'Дневник'),
+              NavigationDestination(icon: Icon(Icons.local_fire_department_outlined), label: 'Сессия'),
+              NavigationDestination(icon: Icon(Icons.school_outlined), label: 'Чай'),
+            ],
+          ),
         ),
       ),
     ),
