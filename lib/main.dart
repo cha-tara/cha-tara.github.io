@@ -134,7 +134,7 @@ Widget home() {
 }
 Widget master() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
   heading('Мастер Чи', 'Ваш проводник в мире чая'),
-  MasterChi(onScan: coming, onStart: (recommendation) {
+  MasterChi(onStart: (recommendation) {
     final tea = recommendation['tea'];
     if (tea is! String || tea.trim().isEmpty) return;
     void setNumber(TextEditingController field, dynamic value, num min, num max) {
@@ -153,7 +153,6 @@ Widget master() => Column(crossAxisAlignment: CrossAxisAlignment.start, children
     });
   }),
 ]);
-void coming()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Эта возможность появится позже')));
 Future<void> shareEntry(Map<String, dynamic> entry) async {
   if (!await FeedApi.requireAccount(context) || !mounted) return;
   final shared = await showDialog<bool>(

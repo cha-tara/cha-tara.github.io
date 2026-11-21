@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'form_screen.dart';
 
 class FeedApi {
   static const baseUrl = String.fromEnvironment('CHA_TARA_API_URL');
@@ -12,9 +13,8 @@ class FeedApi {
 
   static Future<bool> requireAccount(BuildContext context) async {
     if (accountName != null) return true;
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => const FeedSignIn(),
+    return await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => const FeedSignIn()),
         ) ==
         true;
   }
@@ -116,7 +116,8 @@ class _FeedSignInState extends State<FeedSignIn> {
   }
 
   Future<void> submit() async {
-    if (!form.currentState!.validate()) return;
+    if (sending || !form.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
     setState(() {
       sending = true;
       error = null;
@@ -181,74 +182,72 @@ class _FeedSignInState extends State<FeedSignIn> {
   @override
   Widget build(BuildContext context) => PopScope(
         canPop: !sending,
-        child: AlertDialog(
-          title: Text(register ? 'Создать аккаунт' : 'Войти в Cha Tara'),
-          scrollable: true,
-          content: Form(
+        child: FormScreen(
+          title: register ? 'Создать аккаунт' : 'Войти в Cha Tara',
+          child: Form(
             key: form,
             child: AutofillGroup(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                if (register) ...[
-                  input(
-                    label: 'Имя в ленте',
-                    controller: name,
-                    maxLength: 40,
-                    validator: (value) =>
-                        value!.trim().isEmpty ? 'Введите имя' : null,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                input(
-                  label: 'Логин',
-                  controller: login,
-                  autofillHints: const [AutofillHints.username],
-                  validator: (value) =>
-                      RegExp(r'^[a-zA-Z0-9_]{3,32}$').hasMatch(value!.trim())
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (register) ...[
+                      input(
+                        label: 'Имя в ленте',
+                        controller: name,
+                        maxLength: 40,
+                        validator: (value) =>
+                            value!.trim().isEmpty ? 'Введите имя' : null,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    input(
+                      label: 'Логин',
+                      controller: login,
+                      autofillHints: const [AutofillHints.username],
+                      validator: (value) => RegExp(r'^[a-zA-Z0-9_]{3,32}$')
+                              .hasMatch(value!.trim())
                           ? null
                           : 'От 3 до 32 латинских букв, цифр или _',
-                ),
-                const SizedBox(height: 12),
-                input(
-                  label: 'Пароль',
-                  controller: password,
-                  obscureText: true,
-                  autofillHints: [
-                    register
-                        ? AutofillHints.newPassword
-                        : AutofillHints.password
-                  ],
-                  validator: (value) =>
-                      value!.runes.length >= 4 && value.runes.length <= 128
-                          ? null
-                          : 'От 4 до 128 символов',
-                ),
-                if (error != null)
-                  Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(error!)),
-                TextButton(
-                    onPressed: sending
-                        ? null
-                        : () => setState(() {
-                              register = !register;
-                              error = null;
-                            }),
-                    child: Text(register
-                        ? 'У меня уже есть аккаунт'
-                        : 'Создать аккаунт')),
-              ]),
+                    ),
+                    const SizedBox(height: 12),
+                    input(
+                      label: 'Пароль',
+                      controller: password,
+                      obscureText: true,
+                      autofillHints: [
+                        register
+                            ? AutofillHints.newPassword
+                            : AutofillHints.password
+                      ],
+                      validator: (value) =>
+                          value!.runes.length >= 4 && value.runes.length <= 128
+                              ? null
+                              : 'От 4 до 128 символов',
+                    ),
+                    if (error != null)
+                      Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(error!)),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: sending ? null : submit,
+                      child: Text(sending
+                          ? 'Подключаемся…'
+                          : (register ? 'Создать' : 'Войти')),
+                    ),
+                    TextButton(
+                        onPressed: sending
+                            ? null
+                            : () => setState(() {
+                                  register = !register;
+                                  error = null;
+                                }),
+                        child: Text(register
+                            ? 'У меня уже есть аккаунт'
+                            : 'Создать аккаунт')),
+                  ]),
             ),
           ),
-          actions: [
-            TextButton(
-                onPressed: sending ? null : () => Navigator.pop(context),
-                child: const Text('Отмена')),
-            FilledButton(
-                onPressed: sending ? null : submit,
-                child: Text(sending
-                    ? 'Подключаемся…'
-                    : (register ? 'Создать' : 'Войти'))),
-          ],
         ),
       );
 }
