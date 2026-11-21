@@ -135,6 +135,7 @@ Widget home() {
 }
 Widget master() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
   heading('Мастер Чи', 'Ваш проводник в мире чая'),
+  block('Распознать по фото', 'Помощь с чаем и этикеткой', Icons.camera_alt_outlined, coming),
   MasterChi(onStart: (recommendation) {
     final tea = recommendation['tea'];
     if (tea is! String || tea.trim().isEmpty) return;
@@ -153,8 +154,6 @@ Widget master() => Column(crossAxisAlignment: CrossAxisAlignment.start, children
       page = 3;
     });
   }),
-  const SizedBox(height: 20),
-  block('Распознать по фото', 'Помощь с чаем и этикеткой', Icons.camera_alt_outlined, coming),
 ]);
 void coming()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Эта возможность появится позже')));
 Future<void> shareEntry(Map<String, dynamic> entry) async {
