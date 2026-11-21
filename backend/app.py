@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import BoundedSemaphore, Lock
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -132,6 +132,70 @@ class Registration(Credentials):
 
 class MasterQuestion(BaseModel):
     question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1200)]
+    mode: Literal["legacy", "question", "recommendation"] = "legacy"
+
+
+MASTER_TEAS = (
+    "Бай Хао Инь Чжэнь", "Бай Му Дань", "Шоу Мэй", "Лунцзин", "Билочунь",
+    "Маофэн", "Цзюнь Шань Инь Чжэнь", "Хошань Хуан Я", "Да Хун Пао",
+    "Те Гуань Инь", "Дун Дин", "Цзинь Цзюнь Мэй", "Дянь Хун",
+    "Цимэнь Хун Ча", "Шэн пуэр", "Шу пуэр", "Лю Бао", "Фу Чжуань",
+    "GABA улун", "GABA красный",
+)
+BREWING_LIMITS = {"grams": (1, 50), "water": (20, 2000),
+                  "temperature": (40, 100), "seconds": (1, 3600)}
+
+
+def master_prompt(mode):
+    common = (
+        "Ты Мастер Чи, чайный консультант Cha Tara. Пиши кратко по-русски. "
+        "Уточняй, когда не хватает данных. Не обещай лечебных эффектов. "
+        "Не выдумывай факты. Верни только JSON. "
+    )
+    if mode == "question":
+        return common + 'Дай свободный ответ на вопрос в формате {"answer": "текст"}.'
+
+    catalog = "Каталог: " + ", ".join(MASTER_TEAS) + ". "
+    if mode == "legacy":
+        return common + catalog + (
+            "Поля ответа: answer (текст), tea (название или пустая строка), "
+            "grams, water, temperature, seconds (числа или null)."
+        )
+    return common + catalog + (
+        "Подбери 3 разных чая строго из каталога под настроение и вкус пользователя. "
+        "Используй точные названия из каталога. Коротко объясни разницу между "
+        "вариантами: у каждого укажи вкус и причину, по которой он подходит. "
+        "Для каждого укажи реальные параметры первого пролива. "
+        'Формат: {"options": [{"tea": "название из каталога", "reason": "пояснение", '
+        '"grams": 5, "water": 100, "temperature": 90, "seconds": 15}]}. '
+        "Единицы: граммы, миллилитры, градусы Цельсия, секунды."
+    )
+
+
+def master_options(reply):
+    options = []
+    seen = set()
+    for item in reply["options"]:
+        if not isinstance(item, dict):
+            continue
+        tea, reason = item.get("tea"), item.get("reason")
+        if not isinstance(tea, str) or tea not in MASTER_TEAS or tea in seen:
+            continue
+        if not isinstance(reason, str) or not reason.strip():
+            continue
+        values = {field: item.get(field) for field in BREWING_LIMITS}
+        if not all(
+            type(values[field]) in (int, float) and low <= values[field] <= high
+            for field, (low, high) in BREWING_LIMITS.items()
+        ):
+            continue
+        seen.add(tea)
+        options.append({"tea": tea, "reason": reason.strip()[:400], **values})
+        if len(options) == 3:
+            break
+    if len(options) < 2:
+        raise ValueError("Too few valid recommendations")
+    return {"options": options}
 
 
 @app.post("/v1/master")
@@ -144,11 +208,11 @@ def master_question(data: MasterQuestion, request: Request, authorization: Autho
     payload = {
         "model": "qwen/qwen3.8-27b",
         "messages": [
-            {"role": "system", "content": "Ты Мастер Чи, дружелюбный чайный консультант Cha Tara. Отвечай кратко на русском. При нехватке данных уточняй. Не обещай лечебных эффектов. Доступные чаи: Бай Хао Инь Чжэнь, Бай Му Дань, Шоу Мэй, Лунцзин, Билочунь, Маофэн, Цзюнь Шань Инь Чжэнь, Хошань Хуан Я, Да Хун Пао, Те Гуань Инь, Дун Дин, Цзинь Цзюнь Мэй, Дянь Хун, Цимэнь Хун Ча, Шэн пуэр, Шу пуэр, Лю Бао, Фу Чжуань, GABA улун, GABA красный. Если советуешь чай, отвечай JSON: answer (строка), tea (название или пустая строка), grams, water, temperature, seconds (числа или null). Не выдумывай факты."},
+            {"role": "system", "content": master_prompt(data.mode)},
             {"role": "user", "content": data.question},
         ],
         "response_format": {"type": "json_object"},
-        "max_completion_tokens": 800,
+        "max_completion_tokens": 1000 if data.mode == "recommendation" else 800,
         "temperature": 0.5,
     }
     req = urllib.request.Request(
@@ -161,9 +225,13 @@ def master_question(data: MasterQuestion, request: Request, authorization: Autho
         with urllib.request.urlopen(req, timeout=35) as upstream:
             result = json.loads(upstream.read(100000))
         answer = json.loads(result["choices"][0]["message"]["content"])
-        if not isinstance(answer.get("answer"), str):
+        if not isinstance(answer, dict):
             raise ValueError("Invalid response")
-        return answer
+        if data.mode == "recommendation":
+            return master_options(answer)
+        if not isinstance(answer.get("answer"), str) or not answer["answer"].strip():
+            raise ValueError("Invalid response")
+        return {"answer": answer["answer"]} if data.mode == "question" else answer
     except urllib.error.HTTPError as exc:
         raise HTTPException(429 if exc.code == 429 else 502, "Assistant unavailable") from exc
     except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:

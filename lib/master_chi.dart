@@ -89,7 +89,13 @@ class _MasterChiForm extends StatefulWidget {
 }
 
 class _MasterChiFormState extends State<_MasterChiForm> {
+  static const moods = ['Спокойствие', 'Бодрость', 'Уют', 'Сосредоточенность'];
+  static const tastes = ['Цветочный', 'Фруктовый', 'Травянистый', 'Древесный'];
+
   final question = TextEditingController();
+  final optionsHeading = GlobalKey();
+  String? mood;
+  String? taste;
   Map<String, dynamic>? result;
   String? error;
   bool loading = false;
@@ -103,7 +109,20 @@ class _MasterChiFormState extends State<_MasterChiForm> {
   Future<void> ask() async {
     final text = question.text.trim();
     final recommendation = widget.recommendation;
-    if (text.isEmpty || loading) return;
+    if (loading) return;
+    final prompt = recommendation
+        ? [
+            if (mood != null) 'Настроение: $mood',
+            if (taste != null) 'Вкус: $taste',
+            if (text.isNotEmpty) 'Пожелания: $text',
+          ].join('\n')
+        : text;
+    if (prompt.isEmpty) {
+      setState(() => error = recommendation
+          ? 'Выберите настроение, вкус или добавьте пожелание.'
+          : 'Введите вопрос о чае.');
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => loading = true);
     try {
@@ -113,13 +132,22 @@ class _MasterChiFormState extends State<_MasterChiForm> {
         result = null;
       });
       final response = await FeedApi().request('POST', 'master', data: {
-        'question': recommendation
-            ? 'Подбери чай и способ заваривания под это настроение или пожелание: $text'
-            : text,
+        'mode': recommendation ? 'recommendation' : 'question',
+        'question': prompt,
       });
       final decoded =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      if (mounted) setState(() => result = decoded);
+      if (!mounted) return;
+      setState(() => result = decoded);
+      if (recommendation) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final heading = optionsHeading.currentContext;
+          if (heading != null) {
+            Scrollable.ensureVisible(heading,
+                duration: const Duration(milliseconds: 250));
+          }
+        });
+      }
     } on FeedError catch (e) {
       if (mounted)
         setState(() => error = e.status == 429
@@ -134,21 +162,89 @@ class _MasterChiFormState extends State<_MasterChiForm> {
     }
   }
 
+  Widget preference(String title, List<String> values, String? selected,
+      ValueChanged<String?> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final value in values)
+              ChoiceChip(
+                label: Text(value),
+                selected: value == selected,
+                onSelected: loading
+                    ? null
+                    : (active) => setState(() {
+                          onChanged(active ? value : null);
+                          result = null;
+                          error = null;
+                        }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget optionCard(Map<String, dynamic> option) {
+    final tea = option['tea'] as String;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(tea, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(option['reason'] as String),
+            const SizedBox(height: 8),
+            Text('${option['grams']} г · ${option['water']} мл · '
+                '${option['temperature']} °C · ${option['seconds']} сек'),
+            const SizedBox(height: 8),
+            FilledButton.tonal(
+              onPressed: () => Navigator.pop(context, option),
+              child: const Text('Начать сессию'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final tea = result?['tea'];
+    final options = result?['options'] as List<dynamic>?;
+    final answer = result?['answer'] as String?;
     return FormScreen(
         title: widget.title,
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (widget.recommendation) ...[
+            preference('Настроение', moods, mood, (value) => mood = value),
+            preference('Вкус', tastes, taste, (value) => taste = value),
+          ],
           TextField(
             controller: question,
+            enabled: !loading,
+            onChanged: (_) {
+              if (result != null || error != null) {
+                setState(() {
+                  result = null;
+                  error = null;
+                });
+              }
+            },
             minLines: 2,
             maxLines: 4,
             maxLength: widget.recommendation ? 1000 : 1200,
             decoration: InputDecoration(
                 hintText: widget.recommendation
-                    ? 'Расскажите о настроении или пожеланиях'
+                    ? 'Другие пожелания (по желанию)'
                     : 'Что вы хотите узнать о чае?'),
           ),
           const SizedBox(height: 8),
@@ -157,26 +253,25 @@ class _MasterChiFormState extends State<_MasterChiForm> {
               child: Text(loading
                   ? 'Мастер Чи думает…'
                   : widget.recommendation
-                      ? 'Получить рекомендацию'
+                      ? 'Показать варианты'
                       : 'Отправить вопрос')),
           if (error != null)
             Padding(
                 padding: const EdgeInsets.only(top: 16), child: Text(error!)),
-          if (result != null)
+          if (options != null) ...[
+            const SizedBox(height: 16),
+            Text('Выберите чай',
+                key: optionsHeading,
+                style: Theme.of(context).textTheme.titleLarge),
+            for (final option in options)
+              optionCard(option as Map<String, dynamic>),
+          ],
+          if (answer != null)
             Card(
                 child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(result!['answer'] as String),
-                          if (tea is String && tea.trim().isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            FilledButton.tonal(
-                                onPressed: () => Navigator.pop(context, result),
-                                child: const Text('Начать сессию')),
-                          ]
-                        ]))),
+              padding: const EdgeInsets.all(18),
+              child: Text(answer),
+            )),
         ]));
   }
 }
