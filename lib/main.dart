@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'descriptor_wheel.dart';
 import 'social_feed.dart';
 import 'tea_diary.dart';
+import 'master_chi.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -132,7 +133,29 @@ Widget home() {
   ],
 );
 }
-Widget master()=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[heading('Мастер Чи','Ваш проводник в мире чая'),Card(child:Padding(padding:const EdgeInsets.all(22),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Чай начинается\nс внимания.',style:serif(28)),const SizedBox(height:12),const Text('Выберите чай в энциклопедии, а затем запишите свои ощущения после каждого пролива.'),const SizedBox(height:12),TextButton(onPressed:()=>setState(()=>page=4),child:const Text('Выбрать чай →'))]))),const SizedBox(height:20),Text('Скоро появится',style:serif(22)),block('Распознать по фото','Помощь с чаем и этикеткой',Icons.camera_alt_outlined,coming),block('Подобрать чай','Чай под ваше настроение',Icons.spa_outlined,coming),block('Задать вопрос','Поговорить с Мастером Чи',Icons.chat_bubble_outline,coming)]);
+Widget master() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  heading('Мастер Чи', 'Ваш проводник в мире чая'),
+  MasterChi(onStart: (recommendation) {
+    final tea = recommendation['tea'];
+    if (tea is! String || tea.trim().isEmpty) return;
+    void setNumber(TextEditingController field, dynamic value, num min, num max) {
+      if (value is num && value.isFinite && value >= min && value <= max) {
+        field.text = value.toString();
+      }
+    }
+    setState(() {
+      selected = tea.trim();
+      custom.text = selected;
+      setNumber(grams, recommendation['grams'], 1, 50);
+      setNumber(water, recommendation['water'], 20, 2000);
+      setNumber(temp, recommendation['temperature'], 40, 100);
+      setNumber(seconds, recommendation['seconds'], 1, 3600);
+      page = 3;
+    });
+  }),
+  const SizedBox(height: 20),
+  block('Распознать по фото', 'Помощь с чаем и этикеткой', Icons.camera_alt_outlined, coming),
+]);
 void coming()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Эта возможность появится позже')));
 Future<void> shareEntry(Map<String, dynamic> entry) async {
   if (!await FeedApi.requireAccount(context) || !mounted) return;

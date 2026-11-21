@@ -4,6 +4,8 @@ import os
 import re
 import secrets
 import time
+import urllib.request
+import urllib.error
 from collections import OrderedDict
 import sqlite3
 from contextlib import asynccontextmanager, closing, contextmanager
@@ -126,6 +128,46 @@ class Credentials(BaseModel):
 
 class Registration(Credentials):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+
+
+class MasterQuestion(BaseModel):
+    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1200)]
+
+
+@app.post("/v1/master")
+def master_question(data: MasterQuestion, request: Request, authorization: Authorization = None):
+    actor(authorization, required=True)
+    check_auth_rate(request)
+    key = os.getenv("GROQ_API_KEY")
+    if not key:
+        raise HTTPException(503, "Assistant unavailable")
+    payload = {
+        "model": "qwen/qwen3.8-27b",
+        "messages": [
+            {"role": "system", "content": "Ты Мастер Чи, дружелюбный чайный консультант Cha Tara. Отвечай кратко на русском. При нехватке данных уточняй. Не обещай лечебных эффектов. Доступные чаи: Бай Хао Инь Чжэнь, Бай Му Дань, Шоу Мэй, Лунцзин, Билочунь, Маофэн, Цзюнь Шань Инь Чжэнь, Хошань Хуан Я, Да Хун Пао, Те Гуань Инь, Дун Дин, Цзинь Цзюнь Мэй, Дянь Хун, Цимэнь Хун Ча, Шэн пуэр, Шу пуэр, Лю Бао, Фу Чжуань, GABA улун, GABA красный. Если советуешь чай, отвечай JSON: answer (строка), tea (название или пустая строка), grams, water, temperature, seconds (числа или null). Не выдумывай факты."},
+            {"role": "user", "content": data.question},
+        ],
+        "response_format": {"type": "json_object"},
+        "max_completion_tokens": 800,
+        "temperature": 0.5,
+    }
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
+                 "User-Agent": "ChaTara/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=35) as upstream:
+            result = json.loads(upstream.read(100000))
+        answer = json.loads(result["choices"][0]["message"]["content"])
+        if not isinstance(answer.get("answer"), str):
+            raise ValueError("Invalid response")
+        return answer
+    except urllib.error.HTTPError as exc:
+        raise HTTPException(429 if exc.code == 429 else 502, "Assistant unavailable") from exc
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(502, "Assistant unavailable") from exc
 
 
 auth_slots = BoundedSemaphore(1)

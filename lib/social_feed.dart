@@ -69,7 +69,7 @@ class FeedApi {
       final response = await client
           .send(request)
           .then(http.Response.fromStream)
-          .timeout(const Duration(seconds: 12));
+          .timeout(Duration(seconds: path == 'master' ? 45 : 12));
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401 &&
             !path.startsWith('auth/') &&
