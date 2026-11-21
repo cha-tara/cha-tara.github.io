@@ -21,7 +21,24 @@ jobs:
           cache: true
       - run: flutter create --platforms=web .
       - run: flutter pub get
-      - run: flutter build web --release --base-href / --dart-define="CHA_TARA_API_URL=$CHA_TARA_API_URL"
+      - name: Refresh the Flutter loader on every page load
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path("web/index.html")
+          html = index.read_text()
+          original = '<script src="flutter_bootstrap.js" async></script>'
+          loader = """<script>
+            const bootstrap = document.createElement('script');
+            bootstrap.src = 'flutter_bootstrap.js?load=' + Date.now();
+            document.head.appendChild(bootstrap);
+          </script>"""
+          if html.count(original) != 1:
+              raise SystemExit("Unexpected Flutter web template")
+          index.write_text(html.replace(original, loader))
+          PY
+      - run: flutter build web --release --web-content-hash --base-href / --dart-define="CHA_TARA_API_URL=$CHA_TARA_API_URL"
         env:
           CHA_TARA_API_URL: ${{ vars.CHA_TARA_API_URL }}
       - uses: actions/upload-pages-artifact@v3
