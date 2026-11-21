@@ -123,7 +123,7 @@ Authorization = Annotated[str | None, Header()]
 
 class Credentials(BaseModel):
     login: Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, pattern=r"^[a-z0-9_]{3,32}$")]
-    password: Annotated[str, StringConstraints(min_length=10, max_length=128)]
+    password: Annotated[str, StringConstraints(min_length=4, max_length=128)]
 
 
 class Registration(Credentials):

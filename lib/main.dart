@@ -23,7 +23,6 @@ Future<void> save() async {if(selected.isEmpty){ScaffoldMessenger.of(context).sh
 void category(int i){Navigator.push(context,MaterialPageRoute(builder:(ctx)=>Scaffold(appBar:AppBar(backgroundColor:paper,title:Text(categories[i],style:serif(24))),body:ListView(padding:const EdgeInsets.all(20),children:[Text(descriptions[i],style:const TextStyle(color:green,letterSpacing:1)),const SizedBox(height:20),...teas[categories[i]]!.map((t)=>Card(child:ListTile(contentPadding:const EdgeInsets.all(16),leading:CircleAvatar(backgroundColor:colors[i],child:Text(symbols[i],style:const TextStyle(color:Colors.white))),title:Text(t,style:serif(20)),subtitle:Text(categories[i]),trailing:const Icon(Icons.arrow_forward_ios,size:16),onTap:(){setState((){selected=t;page=3;});Navigator.pop(ctx);}))),const SizedBox(height:12),const Text('Выберите чай, чтобы начать сессию.')]))));}
 TextStyle serif(double size,{Color color=ink})=>TextStyle(fontFamily:'Georgia',fontSize:size,color:color,height:1.08);
 Widget heading(String title,String subtitle)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:serif(34)),const SizedBox(height:8),Text(subtitle,style:const TextStyle(color:Color(0xff77786b),fontSize:14)),const SizedBox(height:24)]);
-Widget block(String title,String sub,IconData icon,VoidCallback onTap)=>Card(child:ListTile(contentPadding:const EdgeInsets.symmetric(horizontal:18,vertical:10),leading:CircleAvatar(backgroundColor:const Color(0xffe2dfcd),child:Icon(icon,color:green)),title:Text(title,style:serif(21)),subtitle:Padding(padding:const EdgeInsets.only(top:6),child:Text(sub)),trailing:const Icon(Icons.arrow_forward_ios,size:16),onTap:onTap));
 Widget homeAction(
   String title,
   String subtitle,
@@ -135,8 +134,7 @@ Widget home() {
 }
 Widget master() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
   heading('Мастер Чи', 'Ваш проводник в мире чая'),
-  block('Распознать по фото', 'Помощь с чаем и этикеткой', Icons.camera_alt_outlined, coming),
-  MasterChi(onStart: (recommendation) {
+  MasterChi(onScan: coming, onStart: (recommendation) {
     final tea = recommendation['tea'];
     if (tea is! String || tea.trim().isEmpty) return;
     void setNumber(TextEditingController field, dynamic value, num min, num max) {

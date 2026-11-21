@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'social_feed.dart';
 
 class MasterChi extends StatefulWidget {
+  final VoidCallback onScan;
   final void Function(Map<String, dynamic>) onStart;
-  const MasterChi({super.key, required this.onStart});
+  const MasterChi({super.key, required this.onScan, required this.onStart});
 
   @override
   State<MasterChi> createState() => _MasterChiState();
@@ -57,29 +58,40 @@ class _MasterChiState extends State<MasterChi> {
   }
 
   Widget action({
-    required bool recommendation,
+    bool? recommendation,
     required IconData icon,
     required String title,
     required String subtitle,
   }) {
+    final active = recommendTea == recommendation && recommendation != null;
     return Card(
       child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        selected: recommendTea == recommendation,
-        trailing: const Icon(Icons.chevron_right),
-        onTap: loading
-            ? null
-            : () {
-                if (recommendTea == recommendation) return;
-                setState(() {
-                  recommendTea = recommendation;
-                  question.clear();
-                  result = null;
-                  error = null;
-                });
-              },
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xffe2dfcd),
+          child: Icon(icon, color: const Color(0xff657052), size: 24),
+        ),
+        title: Text(title,
+            style: const TextStyle(
+                fontFamily: 'Georgia', fontSize: 21, height: 1.08)),
+        subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6), child: Text(subtitle)),
+        selected: active,
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: recommendation == null
+            ? widget.onScan
+            : loading
+                ? null
+                : () {
+                    if (recommendTea == recommendation) return;
+                    setState(() {
+                      recommendTea = recommendation;
+                      question.clear();
+                      result = null;
+                      error = null;
+                    });
+                  },
       ),
     );
   }
@@ -88,6 +100,11 @@ class _MasterChiState extends State<MasterChi> {
   Widget build(BuildContext context) {
     final tea = result?['tea'];
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      action(
+        icon: Icons.camera_alt_outlined,
+        title: 'Распознать по фото',
+        subtitle: 'Помощь с чаем и этикеткой',
+      ),
       action(
         recommendation: true,
         icon: Icons.spa_outlined,

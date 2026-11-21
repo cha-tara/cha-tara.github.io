@@ -218,9 +218,9 @@ class _FeedSignInState extends State<FeedSignIn> {
                         : AutofillHints.password
                   ],
                   validator: (value) =>
-                      value!.length >= 10 && value.length <= 128
+                      value!.runes.length >= 4 && value.runes.length <= 128
                           ? null
-                          : 'От 10 до 128 символов',
+                          : 'От 4 до 128 символов',
                 ),
                 if (error != null)
                   Padding(
